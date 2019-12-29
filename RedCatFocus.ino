@@ -15,6 +15,7 @@
 // definition of stepper motor parameter
 #define stepPin 5
 #define dirPin 6
+#define enabledPin 8
 #define stepsPerRevolution 5
 #define stepDelay 2000
 #define MS1 11
@@ -33,6 +34,10 @@ void setup() {
   // declare motor pins as output
   pinMode(stepPin, OUTPUT);
   pinMode(dirPin, OUTPUT);
+  pinMode(enabledPin, OUTPUT);
+
+  // set enabled pin to low, to prevent starting the motor during boot or reset
+  digitalWrite(enabledPin, LOW);
   
   // set internal PullUps
   pinMode(pinForward, INPUT_PULLUP);
