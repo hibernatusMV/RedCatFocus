@@ -13,8 +13,8 @@
   */
 
 // definition of stepper motor parameter
-#define stepPin 5
-#define dirPin 6
+#define stepPin 6
+#define dirPin 5
 #define enabledPin 8
 #define stepsPerRevolution 5
 #define stepDelay 2000
