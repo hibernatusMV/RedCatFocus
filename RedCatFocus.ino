@@ -47,7 +47,7 @@ void setup() {
   pinMode(MS3, OUTPUT);
 
   // initial settings for type of steps (1/16)
-  setSpeed(16);
+  setMicrostep(16);
 }
 
 void loop() {
@@ -77,7 +77,7 @@ void loop() {
   }
 }
 
-void setSpeed(int stepType) {
+void setMicrostep(int stepType) {
   switch (stepType) {
     case 1:
       digitalWrite(MS1, LOW);
