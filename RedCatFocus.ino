@@ -42,15 +42,12 @@ void setup() {
   pinMode(MS3, OUTPUT);
 
   // initial settings for type of steps (1/16)
-  digitalWrite(MS1, HIGH);
-  digitalWrite(MS2, HIGH);
-  digitalWrite(MS3, HIGH);
+  setSpeed(16);
 }
 
 void loop() {
   // check which button is pressed. Avoidto move motor if both buttons are pressed simultaneous
-  if (digitalRead(pinForward) == LOW && digitalRead(pinBackward) != LOW)
-  {
+  if (digitalRead(pinForward) == LOW && digitalRead(pinBackward) != LOW) {
     Serial.println("Focus forward");
     for (int i = 0; i < stepsPerRevolution; i++) {
       // set the dir pin clockwise
@@ -62,8 +59,7 @@ void loop() {
     }
   }
 
-  if (digitalRead(pinBackward) == LOW && digitalRead(pinForward) != LOW)
-  {
+  if (digitalRead(pinBackward) == LOW && digitalRead(pinForward) != LOW) {
     Serial.println("Focus backward");
     for (int i = 0; i < stepsPerRevolution; i++) {
       // set the dir pin counterclockwise
@@ -73,5 +69,40 @@ void loop() {
       digitalWrite(stepPin, LOW);
       delayMicroseconds(stepDelay);
     }
+  }
+}
+
+void setSpeed(int stepType) {
+  switch (stepType) {
+    case 1:
+      digitalWrite(MS1, LOW);
+      digitalWrite(MS2, LOW);
+      digitalWrite(MS3, LOW);
+      break;
+    case 2:
+      digitalWrite(MS1, HIGH);
+      digitalWrite(MS2, LOW);
+      digitalWrite(MS3, LOW);
+      break;
+    case 4:
+      digitalWrite(MS1, LOW);
+      digitalWrite(MS2, HIGH);
+      digitalWrite(MS3, LOW);
+      break;
+    case 8:
+      digitalWrite(MS1, HIGH);
+      digitalWrite(MS2, HIGH);
+      digitalWrite(MS3, LOW);
+      break;
+    case 16:
+      digitalWrite(MS1, HIGH);
+      digitalWrite(MS2, HIGH);
+      digitalWrite(MS3, HIGH);
+      break;
+    default:
+      digitalWrite(MS1, HIGH);
+      digitalWrite(MS2, HIGH);
+      digitalWrite(MS3, HIGH);
+      break;
   }
 }
