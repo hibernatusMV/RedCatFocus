@@ -17,9 +17,9 @@
 #define dirPin 6
 #define stepsPerRevolution 5
 #define stepDelay 2000
-#define MS1 9
+#define MS1 11
 #define MS2 10
-#define MS3 11
+#define MS3 9
 
 // definition of input pins
 #define pinForward 2
