@@ -23,8 +23,8 @@ decode_results results;
 #define stepPin 6
 #define dirPin 5
 #define enabledPin 11
-#define stepsPerRevolution 5
-#define stepDelay 2000
+#define stepsPerRevolution 50
+// #define stepDelay 2000
 #define MS1 10
 #define MS2 9
 #define MS3 8
@@ -33,6 +33,7 @@ decode_results results;
 #define pinForward 2
 #define pinBackward 3
 
+int    stepDelay = 2000;
 String previousVal = "";
 
 
@@ -66,6 +67,7 @@ void setup() {
 void loop() {
   if (irrecv.decode(&results)) {
     String buttonPress = decodeIR(results.value);
+
     if (buttonPress == "REP") {
       buttonPress = previousVal;
     } else {
@@ -73,7 +75,6 @@ void loop() {
     }
     
     // check which button is pressed. Avoidto move motor if both buttons are pressed simultaneous
-    // if (digitalRead(pinForward) == LOW && digitalRead(pinBackward) != LOW) {
     if (buttonPress == "UP") {
       Serial.println("Focus forward");
       for (int i = 0; i < stepsPerRevolution; i++) {
@@ -86,7 +87,6 @@ void loop() {
       }
     }
   
-    // if (digitalRead(pinBackward) == LOW && digitalRead(pinForward) != LOW) {
     if (buttonPress == "DOWN") {
       Serial.println("Focus backward");
       for (int i = 0; i < stepsPerRevolution; i++) {
@@ -98,6 +98,20 @@ void loop() {
         delayMicroseconds(stepDelay);
       }
     }
+
+    if (buttonPress == "1") {
+      stepDelay = 1000;
+    }
+
+    if (buttonPress == "2") {
+      stepDelay = 2000;
+    }
+
+    if (buttonPress == "3") {
+      stepDelay = 3000;
+    }
+    
+    Serial.println("stepDelay is " + String(stepDelay));
     irrecv.resume(); // Receive the next value
   }
 }
