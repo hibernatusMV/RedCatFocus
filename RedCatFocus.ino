@@ -15,12 +15,12 @@
 // definition of stepper motor parameter
 #define stepPin 6
 #define dirPin 5
-#define enabledPin 8
+#define enabledPin 11
 #define stepsPerRevolution 5
 #define stepDelay 2000
-#define MS1 11
-#define MS2 10
-#define MS3 9
+#define MS1 10
+#define MS2 9
+#define MS3 8
 
 // definition of input pins
 #define pinForward 2
