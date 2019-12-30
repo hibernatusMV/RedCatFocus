@@ -23,8 +23,7 @@ decode_results results;
 #define stepPin 6
 #define dirPin 5
 #define enabledPin 11
-#define stepsPerRevolution 50
-// #define stepDelay 2000
+#define stepsPerRevolution 40
 #define MS1 10
 #define MS2 9
 #define MS3 8
@@ -33,7 +32,7 @@ decode_results results;
 #define pinForward 2
 #define pinBackward 3
 
-int    stepDelay = 2000; // Default setting is 2000
+int    stepDelay = 6000; // Default setting is 6000
 String previousVal = "";
 
 
@@ -76,26 +75,18 @@ void loop() {
     
     // check which button is pressed. Avoidto move motor if both buttons are pressed simultaneous
     if (buttonPress == "UP") {
-      Serial.println("Focus forward");
+      Serial.println("Run clockwise");
       for (int i = 0; i < stepsPerRevolution; i++) {
         // set the dir pin clockwise
-        digitalWrite(dirPin, HIGH);
-        digitalWrite(stepPin, HIGH);
-        delayMicroseconds(stepDelay);
-        digitalWrite(stepPin, LOW);
-        delayMicroseconds(stepDelay);
+        runMotor("CW", stepDelay);
       }
     }
   
     if (buttonPress == "DOWN") {
-      Serial.println("Focus backward");
+      Serial.println("Run counterclockwise");
       for (int i = 0; i < stepsPerRevolution; i++) {
         // set the dir pin counterclockwise
-        digitalWrite(dirPin, LOW);
-        digitalWrite(stepPin, HIGH);
-        delayMicroseconds(stepDelay);
-        digitalWrite(stepPin, LOW);
-        delayMicroseconds(stepDelay);
+        runMotor("CCW", stepDelay);
       }
     }
 
@@ -110,10 +101,34 @@ void loop() {
     if (buttonPress == "3") {
       stepDelay = 3000;
     }
+
+    if (buttonPress == "4") {
+      stepDelay = 4000;
+    }
+
+    if (buttonPress == "5") {
+      stepDelay = 5000;
+    }
+
+    if (buttonPress == "6") {
+      stepDelay = 6000;
+    }
     
     Serial.println("stepDelay is " + String(stepDelay));
     irrecv.resume(); // Receive the next value
   }
+}
+
+void runMotor(String dir, int stepDelay) {
+  if (dir == "CW") {
+    digitalWrite(dirPin, LOW);
+  } else if (dir == "CCW") {
+     digitalWrite(dirPin, HIGH);
+  }
+  digitalWrite(stepPin, HIGH);
+  delayMicroseconds(stepDelay);
+  digitalWrite(stepPin, LOW);
+  delayMicroseconds(stepDelay);
 }
 
 void setMicrostep(int stepType) {
