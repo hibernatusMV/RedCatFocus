@@ -33,7 +33,7 @@ decode_results results;
 #define pinForward 2
 #define pinBackward 3
 
-int    stepDelay = 2000;
+int    stepDelay = 2000; // Default setting is 2000
 String previousVal = "";
 
 
@@ -61,7 +61,7 @@ void setup() {
   pinMode(MS3, OUTPUT);
 
   // initial settings for type of steps (1/16)
-  setMicrostep(16);
+  setMicrostep(4);
 }
 
 void loop() {
