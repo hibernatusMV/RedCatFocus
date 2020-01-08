@@ -1,200 +1,259 @@
-/* Build a focusing unit for the William Optics RedCat 51
- * Created by Marcus Vasi
+/* Build a focusing unit for the William Optics RedCat AP51/250
+ * Marcus Vasi
  * www.eifeltwister.space
+ *
+ * Based on EQFocuserStepper by Everett Quebral
+ * This driver is for ULN2003 Motor Driver
+ * Can work with ST35 (12v) Stepper Motor or
+ * 28BYJ-48 (5v) Stepper Motor
  */
 
- /* Configure type of steps
-  *            MS1 MS2 MS3
-  * Full step   0   0   0
-  * 1/2 step    1   0   0
-  * 1/4 step    0   1   0
-  * 1/8 step    1   1   0
-  * 1/16 step   1   1   1
-  */
+#include <AccelStepper.h>
 
-#include <IRremote.h>
+// motor pins
+#define motorPin5 8  // IN4
+#define motorPin6 9  // IN3
+#define motorPin7 10 // IN2
+#define motorPin8 11 // IN1
 
-// configuration for remote control
-int RECV_PIN = 3;
-IRrecv irrecv(RECV_PIN);
-decode_results results;
+// Declaration needed for the AccelStepper Library
+AccelStepper stepper1(AccelStepper::FULL4WIRE, motorPin5, motorPin7, motorPin6, motorPin8);
 
-// definition of stepper motor parameter
-#define stepPin 6
-#define dirPin 5
-#define enabledPin 11
-#define stepsPerRevolution 40
-#define MS1 10
-#define MS2 9
-#define MS3 8
+// for command purposes
+String inputString = "";
+int step = 0;
+int backlashStep = 0;
+String lastDirection = "NONE"; //"OUTWARD"
+String currentDirection = "NONE";
 
-// definition of input pins
-#define pinForward 2
-#define pinBackward 3
+// for pin values
+int ccwPin = 7;
+int cwPin = 6;
+int ccwVal = 0;
+int cwVal = 0;
 
-int    stepDelay = 6000; // Default setting is 6000
-String previousVal = "";
+// for the variable resistor
+int potpin = 0;
+int variableResistorValue = 10;
+int oldVariableResistorValue = 10;
 
+// for manual control
+long toPosition;
+bool positionReported = false;
 
 void setup() {
   Serial.begin(9600);
-  delay(200);
-  Serial.println("Serial established");
-
-  // Start the receiver
-  irrecv.enableIRIn();
+  Serial.println("EQFOCUSER_STEPPER#");
   
-  // declare motor pins as output
-  pinMode(stepPin, OUTPUT);
-  pinMode(dirPin, OUTPUT);
-  pinMode(enabledPin, OUTPUT);
+  stepper1.setMaxSpeed(100.0);
+  stepper1.setAcceleration(100.0);
+  stepper1.setSpeed(100);
 
-  // set enabled pin to low, to prevent starting the motor during boot or reset
-  digitalWrite(enabledPin, LOW);
-  
-  // set internal PullUps
-  pinMode(pinForward, INPUT_PULLUP);
-  pinMode(pinBackward, INPUT_PULLUP);
-  pinMode(MS1, OUTPUT);
-  pinMode(MS2, OUTPUT);
-  pinMode(MS3, OUTPUT);
+  inputString.reserve(200);
 
-  // initial settings for type of steps (1/16)
-  setMicrostep(4);
+  pinMode(ccwPin, INPUT_PULLUP);
+  pinMode(cwPin, INPUT_PULLUP);
 }
+
 
 void loop() {
-  if (irrecv.decode(&results)) {
-    String buttonPress = decodeIR(results.value);
+  variableResistorValue = analogRead(potpin);
 
-    if (buttonPress == "REP") {
-      buttonPress = previousVal;
-    } else {
-      previousVal = buttonPress;
+  cwVal = digitalRead(cwPin);
+  ccwVal = digitalRead(ccwPin);
+
+  if (ccwVal == LOW || cwVal == LOW) {
+    Serial.print("MOVING:");
+    if (ccwVal == LOW) {
+      toPosition = stepper1.currentPosition() - variableResistorValue / 10;
+      Serial.print(toPosition);
+      applyBacklashStep(toPosition, lastDirection, "INWARD");
+      lastDirection = "INWARD";
+      
     }
-    
-    // check which button is pressed. Avoidto move motor if both buttons are pressed simultaneous
-    if (buttonPress == "UP") {
-      Serial.println("Run clockwise");
-      for (int i = 0; i < stepsPerRevolution; i++) {
-        // set the dir pin clockwise
-        runMotor("CW", stepDelay);
+    if (cwVal == LOW) {
+      toPosition = stepper1.currentPosition() + variableResistorValue / 10;
+      Serial.print(toPosition);
+      applyBacklashStep(toPosition, lastDirection, "OUTWARD");
+      lastDirection = "OUTWARD";
+    }
+    Serial.println("#");
+    stepper1.run();
+
+    if (toPosition == stepper1.currentPosition()) {
+      // the stepper is not really moving here so just report the posiiton
+      reportPosition();
+    }
+  }
+  else {
+    if (stepper1.distanceToGo() != 0) {
+      // let the stepper finish the movement
+      stepper1.run();
+      positionReported = false;
+    }
+    if (stepper1.distanceToGo() == 0 && !positionReported) {
+      reportPosition();
+      delay(500);
+      positionReported = true;
+    }
+  }
+}
+
+void reportPosition() {
+  Serial.print("POSITION:");
+  Serial.print(stepper1.currentPosition());
+  Serial.println("#");
+}
+
+// test if direction is the same, otherwise apply backlash step
+// this method is only applicable for manual focusing changes
+void applyBacklashStep(int toPosition, String lastDirection, String currentDirection){
+  if (lastDirection == currentDirection){
+    // no backlash
+    stepper1.moveTo(toPosition);
+  }
+  else {
+    // apply backlash
+    stepper1.moveTo(toPosition + backlashStep);
+    stepper1.setCurrentPosition(toPosition - backlashStep);
+  }
+}
+
+/**
+* process the command we recieved from the client
+* command format is <Letter><Space><Integer>
+* i.e. A 500 ---- Fast Rewind with 500 steps
+*/
+void serialCommand(String commandString) {
+  char _command = commandString.charAt(0);
+  int _step = commandString.substring(2).toInt();
+  String _answer = "";
+  int _currentPosition = stepper1.currentPosition();
+  int _newPosition = _currentPosition;
+  int _backlashStep;
+
+
+  
+  switch (_command) {
+  case 'A':  // FAST REVERSE "<<"
+  case 'a': _newPosition = _currentPosition - ( _step * 2 );
+            currentDirection = "INWARD";
+    break;
+  case 'B':  // REVERSE "<"
+  case 'b': _newPosition = _currentPosition - _step;
+            currentDirection = "INWARD";
+    break;
+  case 'C':  // FORWARD ">"
+  case 'c': _newPosition = _currentPosition + _step;
+            currentDirection = "OUTWARD";
+    break;
+  case 'D':  // FAST FORWARD ">>"
+  case 'd': _newPosition = _currentPosition + ( _step * 2 );
+            currentDirection = "OUTWARD";
+    break;
+  case 'E':  // MOVE TO POSITION
+  case 'e': _newPosition = _step;
+    break;
+  case 'F':  // GET CURRENT POSITION
+  case 'f': _answer += _currentPosition;
+    break;
+  case 'G':  // SET POSITION TO 0
+  case 'g': _newPosition = 0;
+    _currentPosition = 0;
+    stepper1.setCurrentPosition(0);
+    break;
+  case 'H':  // SET ACCELERATION
+  case 'h': _newPosition = _currentPosition; // non move command
+    stepper1.setAcceleration(_step);
+    _answer += "SET-ACCELERATION:";
+    _answer += _step;
+    break;
+  case 'I':  // SET SPEED
+    _newPosition = _currentPosition; // non move command
+    stepper1.setSpeed(_step);
+    _answer += "SET-SPEED:";
+    _answer += _step;
+    break;
+  case 'i':  // GET SPEED
+    _newPosition = _currentPosition; // non move command
+    _answer += "GET-SPEED:";
+    _answer += stepper1.speed();
+    break;
+  case 'J':  // SET MAX SPEED
+  case 'j':  _newPosition = _currentPosition; // non move command
+    stepper1.setMaxSpeed(_step);
+    _answer += "SET-MAXSPEED:";
+    _answer += _step;
+    break;
+  case 'k': // GET TEMPERATURE / HUMIDITY
+    _newPosition = _currentPosition; // non move command
+    break;
+  case 'L' :
+  case 'l' :
+    backlashStep = _step;
+    _answer += "SET-BACKLASHSTEP:";
+    _answer += _step;
+    break;
+  case 'X':  // GET STATUS - may not be needed
+  case 'x':
+    stepper1.stop();
+    break;
+  case 'Z':  // IDENTIFY
+  case 'z':  _answer += "EQFOCUSER_STEPPER";
+    break;
+  default:
+    _answer += "EQFOCUSER_STEPPER";
+    break;
+  }
+
+  if (_newPosition != _currentPosition) {
+    if (lastDirection != "NONE"){
+      if (stepper1.currentPosition() < _newPosition){
+        // moving forward
+        currentDirection == "OUTWARD";
+      }
+      if (stepper1.currentPosition() > _newPosition){
+        // moving backward
+        currentDirection == "INWARD";
+      }
+      Serial.print(lastDirection);Serial.print("===");Serial.println(currentDirection);
+      if (lastDirection != currentDirection){
+        if (currentDirection == "OUTWARD") _newPosition = _newPosition + backlashStep;
+        if (currentDirection == "INWARD") _newPosition = _newPosition - backlashStep;
+      }
+      else {
+        _backlashStep = 0;
       }
     }
   
-    if (buttonPress == "DOWN") {
-      Serial.println("Run counterclockwise");
-      for (int i = 0; i < stepsPerRevolution; i++) {
-        // set the dir pin counterclockwise
-        runMotor("CCW", stepDelay);
-      }
-    }
-
-    if (buttonPress == "1") {
-      stepDelay = 1000;
-    }
-
-    if (buttonPress == "2") {
-      stepDelay = 2000;
-    }
-
-    if (buttonPress == "3") {
-      stepDelay = 3000;
-    }
-
-    if (buttonPress == "4") {
-      stepDelay = 4000;
-    }
-
-    if (buttonPress == "5") {
-      stepDelay = 5000;
-    }
-
-    if (buttonPress == "6") {
-      stepDelay = 6000;
-    }
-    
-    Serial.println("stepDelay is " + String(stepDelay));
-    irrecv.resume(); // Receive the next value
+    // a move command was issued
+    Serial.print("MOVING:");
+    Serial.print(_newPosition);
+    Serial.println("#");
+    //    stepper1.runToNewPosition(_newPosition);  // this will block the execution
+    stepper1.moveTo(_newPosition);
+    stepper1.runSpeedToPosition();
+    lastDirection = currentDirection;
+    _answer += "POSITION:";
+    _answer += stepper1.currentPosition();
   }
+
+
+  Serial.print(_answer);
+  Serial.println("#");
 }
 
-void runMotor(String dir, int stepDelay) {
-  if (dir == "CW") {
-    digitalWrite(dirPin, LOW);
-  } else if (dir == "CCW") {
-     digitalWrite(dirPin, HIGH);
-  }
-  digitalWrite(stepPin, HIGH);
-  delayMicroseconds(stepDelay);
-  digitalWrite(stepPin, LOW);
-  delayMicroseconds(stepDelay);
-}
-
-void setMicrostep(int stepType) {
-  switch (stepType) {
-    case 1:
-      digitalWrite(MS1, LOW);
-      digitalWrite(MS2, LOW);
-      digitalWrite(MS3, LOW);
-      break;
-    case 2:
-      digitalWrite(MS1, HIGH);
-      digitalWrite(MS2, LOW);
-      digitalWrite(MS3, LOW);
-      break;
-    case 4:
-      digitalWrite(MS1, LOW);
-      digitalWrite(MS2, HIGH);
-      digitalWrite(MS3, LOW);
-      break;
-    case 8:
-      digitalWrite(MS1, HIGH);
-      digitalWrite(MS2, HIGH);
-      digitalWrite(MS3, LOW);
-      break;
-    case 16:
-      digitalWrite(MS1, HIGH);
-      digitalWrite(MS2, HIGH);
-      digitalWrite(MS3, HIGH);
-      break;
-    default:
-      digitalWrite(MS1, HIGH);
-      digitalWrite(MS2, HIGH);
-      digitalWrite(MS3, HIGH);
-      break;
-  }
-}
-
-String decodeIR (long x) {
-  String hexCode = String(x, HEX);
-  if (hexCode == "fd10ef") {
-      return "DOWN";
-  } else if (hexCode == "fd50af") {
-      return "UP";
-  } else if (hexCode == "fd30cf") {
-      return "0";
-  } else if (hexCode == "fd08f7") {
-      return "1";
-  } else if (hexCode == "fd8877") {
-      return "2";
-  } else if (hexCode == "fd48b7") {
-      return "3";
-  } else if (hexCode == "fd28d7") {
-      return "4";
-  } else if (hexCode == "fda857") {
-      return "5";
-  } else if (hexCode == "fd6897") {
-      return "6";
-  } else if (hexCode == "fd18e7") {
-      return "7";
-  } else if (hexCode == "fd9867") {
-      return "8";
-  } else if (hexCode == "fd58a7") {
-      return "9";
-  } else if (hexCode == "ffffffff") {
-      return "REP";
-  } else {
-    return "NA";
+/**
+* handler for the serial communicationes
+* calls the SerialCommand whenever a new command is received
+*/
+void serialEvent() {
+  while (Serial.available()) {
+    char inChar = (char)Serial.read();
+    inputString += inChar;
+    if (inChar == '\n') {
+      serialCommand(inputString);
+      inputString = "";
+    }
   }
 }
